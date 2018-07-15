@@ -15,7 +15,8 @@ export class EntriesComponent implements OnInit {
 
   ngOnInit() {
     this.entries = new Loader<Entry[], string>();
-    this.entryServie.getEntries().subscribe(
+    this.entryServie.getEntries()
+    .subscribe(
       (entries) => {
         console.log('entries', entries);
         this.entries = entries;
@@ -44,5 +45,4 @@ export class EntriesComponent implements OnInit {
   get entriesError(): boolean {
     return this.entries.state === LoaderState.ERROR;
   }
-
 }

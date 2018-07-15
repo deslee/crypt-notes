@@ -1,12 +1,11 @@
 import { Injectable } from '@angular/core';
 import { of, concat, Observable, BehaviorSubject } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { utc } from 'moment';
-import { Entry as EntryModel } from './entry.model';
+import { Entry } from './entry.model';
 import { Loader, LoaderState } from './loader.model';
 import { CryptoService } from './crypto.service';
 
-type Entries = Loader<EntryModel[], string>;
-type Entry = Loader<EntryModel, string>;
 const ENTRIES_CYPHER_TEXT_KEY = 'entriesCypherText';
 const ENTRIES_PASSWORD_KEY = 'entriesPassword';
 
@@ -14,10 +13,10 @@ const ENTRIES_PASSWORD_KEY = 'entriesPassword';
     providedIn: 'root'
 })
 export class EntryService {
-    private entries: BehaviorSubject<Entries>;
+    private entries: BehaviorSubject<Loader<Entry[], string>>;
 
     constructor(private cryptoService: CryptoService) {
-        this.entries = new BehaviorSubject<Entries>({
+        this.entries = new BehaviorSubject<Loader<Entry[], string>>({
             state: LoaderState.LOADING
         });
 
@@ -49,11 +48,19 @@ export class EntryService {
         sessionStorage.removeItem(ENTRIES_PASSWORD_KEY);
     }
 
-    getEntries(): Observable<Entries> {
-        return this.entries.asObservable();
+    getEntries(): Observable<Loader<Entry[], string>> {
+        return this.entries.asObservable()
+        .pipe(
+            map(entries => {
+                if (entries.value) {
+                entries.value = entries.value.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                }
+                return entries;
+            }
+        ));
     }
 
-    updateEntries(entries: EntryModel[]): Promise<void> {
+    updateEntries(entries: Entry[]): Promise<void> {
         entries = this.cloneDeep(entries);
         return new Promise((resolve, reject) => {
             try {
@@ -71,8 +78,8 @@ export class EntryService {
         });
     }
 
-    newEntry(): Promise<EntryModel> {
-        const entry: EntryModel = {
+    newEntry(): Promise<Entry> {
+        const entry: Entry = {
             id: this.cryptoService.guid(),
             date: utc().format(),
             title: '',
@@ -80,11 +87,11 @@ export class EntryService {
             tags: []
         };
 
-        return new Promise<EntryModel>((resolve, reject) => {
+        return new Promise<Entry>((resolve, reject) => {
             try {
                 const entries = [
-                    ...this.getEntriesFromPersist(),
-                    entry
+                    entry,
+                    ...this.getEntriesFromPersist()
                 ];
 
                 this.updateEntries(entries)
@@ -96,7 +103,7 @@ export class EntryService {
         });
     }
 
-    updateEntry(entry: EntryModel): Promise<void> {
+    updateEntry(entry: Entry): Promise<void> {
         entry = this.cloneDeep(entry);
         return new Promise<void>((resolve, reject) => {
             try {
@@ -131,11 +138,11 @@ export class EntryService {
         })
     }
 
-    private getEntriesFromPersist(hashedPassword?: string): EntryModel[] {
+    private getEntriesFromPersist(hashedPassword?: string): Entry[] {
         const entriesCypherText = localStorage.getItem(ENTRIES_CYPHER_TEXT_KEY);
         const password = hashedPassword || sessionStorage.getItem(ENTRIES_PASSWORD_KEY);
 
-        let value: EntryModel[];
+        let value: Entry[];
         if (!entriesCypherText) {
             value = [];
         } else {
