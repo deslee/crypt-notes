@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
-import { of, concat, Observable } from 'rxjs';
-import { delay } from 'rxjs/operators';
-import { Entry } from './entry.model';
+import { of, concat, Observable, BehaviorSubject } from 'rxjs';
+import { utc } from 'moment';
+import { Entry as EntryModel } from './entry.model';
 import { Loader, LoaderState } from './loader.model';
 import { CryptoService } from './crypto.service';
 
-type Entries = Loader<Entry[], string>;
+type Entries = Loader<EntryModel[], string>;
+type Entry = Loader<EntryModel, string>;
 const ENTRIES_CYPHER_TEXT_KEY = 'entriesCypherText';
 const ENTRIES_PASSWORD_KEY = 'entriesPassword';
 
@@ -13,7 +14,21 @@ const ENTRIES_PASSWORD_KEY = 'entriesPassword';
     providedIn: 'root'
 })
 export class EntryService {
-    constructor(private cryptoService: CryptoService) {}
+    private entries: BehaviorSubject<Entries>;
+
+    constructor(private cryptoService: CryptoService) {
+        this.entries = new BehaviorSubject<Entries>({
+            state: LoaderState.LOADING
+        });
+
+        if (this.isUnlocked()) {
+            const entries = this.getEntriesFromPersist();
+            this.entries.next({
+                state: LoaderState.LOADED,
+                value: entries
+            });
+        }
+    }
 
     isUnlocked(): boolean {
         const password = sessionStorage.getItem(ENTRIES_PASSWORD_KEY);
@@ -22,6 +37,11 @@ export class EntryService {
 
     unlock(password: string): void {
         const hashedPassword = this.cryptoService.hash(password);
+        const entries = this.getEntriesFromPersist(hashedPassword);
+        this.entries.next({
+            state: LoaderState.LOADED,
+            value: entries
+        });
         sessionStorage.setItem(ENTRIES_PASSWORD_KEY, hashedPassword);
     }
 
@@ -30,46 +50,102 @@ export class EntryService {
     }
 
     getEntries(): Observable<Entries> {
-        const initialValue: Observable<Entries> = of({
-            state: LoaderState.LOADING
-        });
-        const entriesCypherText = localStorage.getItem(ENTRIES_CYPHER_TEXT_KEY);
-        const password = sessionStorage.getItem(ENTRIES_PASSWORD_KEY);
-
-        let value: Observable<Entries>;
-        if (!entriesCypherText) {
-            value = of({
-                state: LoaderState.LOADED,
-                value: []
-            });
-        } else {
-            try {
-                value = of({
-                    state: LoaderState.LOADED,
-                    value: this.cryptoService.decrypt('', entriesCypherText)
-                });
-                console.log(value);
-            } catch (error) {
-                value = of({
-                    state: LoaderState.ERROR,
-                    error: error.toString()
-                });
-            }
-        }
-
-        return concat(initialValue, value);
+        return this.entries.asObservable();
     }
 
-    updateEntries(entries: Entry[]): Observable<void> {
-        return new Observable<void>(observer => {
+    updateEntries(entries: EntryModel[]): Promise<void> {
+        entries = this.cloneDeep(entries);
+        return new Promise((resolve, reject) => {
             try {
                 const password = sessionStorage.getItem(ENTRIES_PASSWORD_KEY);
                 const cypherText = this.cryptoService.encrypt(password, entries);
                 localStorage.setItem(ENTRIES_CYPHER_TEXT_KEY, cypherText);
-                observer.complete();
+                this.entries.next({
+                    state: LoaderState.LOADED,
+                    value: entries
+                });
+                resolve();
             } catch (error) {
-                observer.error(error.toString());
+                reject(error.toString());
             }
         });
+    }
+
+    newEntry(): Promise<EntryModel> {
+        const entry: EntryModel = {
+            id: this.cryptoService.guid(),
+            date: utc().format(),
+            title: '',
+            text: '',
+            tags: []
+        };
+
+        return new Promise<EntryModel>((resolve, reject) => {
+            try {
+                const entries = [
+                    ...this.getEntriesFromPersist(),
+                    entry
+                ];
+
+                this.updateEntries(entries)
+                    .then(() => resolve(this.cloneDeep(entry)))
+                    .catch(err => reject(err.toString()));
+            } catch (e) {
+                reject(e.toString());
+            }
+        });
+    }
+
+    updateEntry(entry: EntryModel): Promise<void> {
+        entry = this.cloneDeep(entry);
+        return new Promise<void>((resolve, reject) => {
+            try {
+                const entries = this.getEntriesFromPersist()
+                    .map(e => {
+                        if (e.id === entry.id) {
+                            return entry;
+                        } else {
+                            return e;
+                        }
+                    });
+
+                this.updateEntries(entries)
+                    .then(() => resolve())
+                    .catch(err => reject(err.toString()));
+            } catch (e) {
+                reject(e.toString());
+            }
+        });
+    }
+
+    deleteEntry(id: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            try {
+                const entries = this.getEntriesFromPersist().filter(e => e.id !== id);
+                this.updateEntries(entries)
+                    .then(() => resolve())
+                    .catch(err => reject(err.toString()));
+            } catch (e) {
+                reject(e.toString());
+            }
+        })
+    }
+
+    private getEntriesFromPersist(hashedPassword?: string): EntryModel[] {
+        const entriesCypherText = localStorage.getItem(ENTRIES_CYPHER_TEXT_KEY);
+        const password = hashedPassword || sessionStorage.getItem(ENTRIES_PASSWORD_KEY);
+
+        let value: EntryModel[];
+        if (!entriesCypherText) {
+            value = [];
+        } else {
+            value = this.cryptoService.decrypt(password, entriesCypherText);
+        }
+
+        return value;
+    }
+
+    private cloneDeep<T>(obj: T): T {
+        return JSON.parse(JSON.stringify(obj));
     }
 }

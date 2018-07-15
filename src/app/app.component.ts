@@ -1,5 +1,6 @@
 import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { EntryService } from './shared/entry.service';
+import { Entry } from './shared/entry.model';
 
 @Component({
   selector: 'app-root',
@@ -11,6 +12,7 @@ export class AppComponent implements OnInit {
   constructor(private entryServie: EntryService) {}
 
   @ViewChild('passwordInput') passwordInput: ElementRef<HTMLInputElement>;
+  singleEntry?: Entry;
 
   ngOnInit() {
   }
@@ -27,6 +29,12 @@ export class AppComponent implements OnInit {
     const password = this.passwordInput.nativeElement.value;
     this.entryServie.unlock(password);
     this.passwordInput.nativeElement.value = '';
+  }
+
+  addEntry() {
+    this.entryServie.newEntry().then(entry => {
+      this.singleEntry = entry;
+    });
   }
 
 }

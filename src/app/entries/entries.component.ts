@@ -15,9 +15,9 @@ export class EntriesComponent implements OnInit {
 
   ngOnInit() {
     this.entries = new Loader<Entry[], string>();
-
     this.entryServie.getEntries().subscribe(
       (entries) => {
+        console.log('entries', entries);
         this.entries = entries;
       },
       err => {
@@ -27,6 +27,10 @@ export class EntriesComponent implements OnInit {
         console.log('completed');
       }
     );
+  }
+
+  delete(entry: Entry) {
+    this.entryServie.deleteEntry(entry.id);
   }
 
   get entriesLoaded(): boolean {

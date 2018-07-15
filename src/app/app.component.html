@@ -8,5 +8,7 @@
 </div>
 <div *ngIf="isUnlocked">
   <h1>Entries</h1>
+  <button (click)="addEntry()">Add entry</button>
+  <app-entry *ngIf="singleEntry" [entry]="singleEntry"></app-entry>
   <app-entries></app-entries>
 </div>

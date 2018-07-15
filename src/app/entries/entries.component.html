@@ -2,7 +2,12 @@
   im loading
 </div>
 <div *ngIf="entriesLoaded">
-  im done loading
+  <div *ngFor="let entry of entries.value">
+    <p>{{entry.title}}</p>
+    <p>{{entry.date}}</p>
+    <p>{{entry.text}}</p>
+    <button (click)="delete(entry)">Delete</button>
+  </div>
 </div>
 <div *ngIf="entriesError">
   I haz error

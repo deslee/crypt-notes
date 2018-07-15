@@ -1,3 +1,4 @@
-<p>
-  entry works!
-</p>
+<form>
+  <input (input)="fieldUpdate()" name="title" type="text" placeholder="title" [(ngModel)]="entry.title" />
+  <input (input)="fieldUpdate()" name="text" type="text" placeholder="text" [(ngModel)]="entry.text" />
+</form>
